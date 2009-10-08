@@ -1,0 +1,11 @@
+libev-perl (3.8-2) unstable; urgency=low
+
+  * add common::sense dependice
+
+ -- Carl Fürstenberg <carl@excito.com>  Thu,  8 Oct 2009 13:42:32 +0000
+
+libev-perl (3.8-1) unstable; urgency=low
+
+  * Initial Release.
+
+ -- Carl Fürstenberg <carl@excito.com>  Wed, 7 Oct 2009 14:58:03 +0200
