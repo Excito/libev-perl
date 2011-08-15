@@ -52,6 +52,15 @@ SYNOPSIS
        EV::loop EV::LOOP_ONESHOT;  # block until at least one event could be handled
        EV::loop EV::LOOP_NONBLOCK; # try to handle same events, but do not block
 
+BEFORE YOU START USING THIS MODULE
+    If you only need timer, I/O, signal, child and idle watchers and not the
+    advanced functionality of this module, consider using AnyEvent instead,
+    specifically the simplified API described in AE.
+
+    When used with EV as backend, the AE API is as fast as the native EV
+    API, but your programs/modules will still run with many other event
+    loops.
+
 DESCRIPTION
     This module provides an interface to libev
     (<http://software.schmorp.de/pkg/libev.html>). While the documentation
@@ -67,6 +76,36 @@ DESCRIPTION
     loops (if you don't rely on any watcher types not available through it)
     and still be faster than with any other event loop currently supported
     in Perl.
+
+  PORTING FROM EV 3.X to 4.X
+    EV version 4 introduces a number of incompatible changes summarised
+    here. According to the depreciation strategy used by libev, there is a
+    compatibility layer in place so programs should continue to run
+    unchanged (the XS interface lacks this layer, so programs using that one
+    need to be updated).
+
+    This compatibility layer will be switched off in some future release.
+
+    All changes relevant to Perl are renames of symbols, functions and
+    methods:
+
+      EV::loop          => EV::run
+      EV::LOOP_NONBLOCK => EV::RUN_NOWAIT
+      EV::LOOP_ONESHOT  => EV::RUN_ONCE
+
+      EV::unloop        => EV::break
+      EV::UNLOOP_CANCEL => EV::BREAK_CANCEL
+      EV::UNLOOP_ONE    => EV::BREAK_ONE
+      EV::UNLOOP_ALL    => EV::BREAK_ALL
+
+      EV::TIMEOUT       => EV::TIMER
+
+      EV::loop_count    => EV::iteration
+      EV::loop_depth    => EV::depth
+      EV::loop_verify   => EV::verify
+
+    The loop object methods corresponding to the functions above have been
+    similarly renamed.
 
   MODULE EXPORTS
     This module does not export any symbols.
@@ -203,17 +242,20 @@ BASIC INTERFACE
 
         The $flags argument can be one of the following:
 
-           0                  as above
-           EV::LOOP_ONESHOT   block at most once (wait, but do not loop)
-           EV::LOOP_NONBLOCK  do not block at all (fetch/handle events but do not wait)
+           0                as above
+           EV::LOOP_ONCE    block at most once (wait, but do not loop)
+           EV::LOOP_NOWAIT  do not block at all (fetch/handle events but do not wait)
 
-    EV::unloop [$how]
-    $loop->unloop ([$how])
-        When called with no arguments or an argument of EV::UNLOOP_ONE,
-        makes the innermost call to EV::loop return.
+    EV::break [$how]
+    $loop->break ([$how])
+        When called with no arguments or an argument of EV::BREAK_ONE, makes
+        the innermost call to EV::loop return.
 
-        When called with an argument of EV::UNLOOP_ALL, all calls to
-        EV::loop will return as fast as possible.
+        When called with an argument of EV::BREAK_ALL, all calls to EV::loop
+        will return as fast as possible.
+
+        When called with an argument of EV::BREAK_CANCEL, any pending break
+        will be cancelled.
 
     $count = EV::loop_count
     $count = $loop->loop_count
@@ -237,22 +279,27 @@ BASIC INTERFACE
         When an error occurs or either the timeout or I/O watcher triggers,
         then the callback will be called with the received event set (in
         general you can expect it to be a combination of "EV::ERROR",
-        "EV::READ", "EV::WRITE" and "EV::TIMEOUT").
+        "EV::READ", "EV::WRITE" and "EV::TIMER").
 
         EV::once doesn't return anything: the watchers stay active till
         either of them triggers, then they will be stopped and freed, and
         the callback invoked.
 
-    EV::feed_fd_event ($fd, $revents)
+    EV::feed_fd_event $fd, $revents
     $loop->feed_fd_event ($fd, $revents)
         Feed an event on a file descriptor into EV. EV will react to this
         call as if the readyness notifications specified by $revents (a
         combination of "EV::READ" and "EV::WRITE") happened on the file
         descriptor $fd.
 
-    EV::feed_signal_event ($signal)
-        Feed a signal event into EV. EV will react to this call as if the
-        signal specified by $signal had occured.
+    EV::feed_signal_event $signal
+        Feed a signal event into the default loop. EV will react to this
+        call as if the signal specified by $signal had occured.
+
+    EV::feed_signal $signal
+        Feed a signal event into EV - unlike "EV::feed_signal_event", this
+        works regardless of which loop has registered the signal, and is
+        mainly useful fro custom signal implementations.
 
     EV::set_io_collect_interval $time
     $loop->set_io_collect_interval ($time)
@@ -292,8 +339,7 @@ WATCHER OBJECTS
     same callback for multiple watchers. The event mask is named after the
     type, i.e. EV::child sets EV::CHILD, EV::prepare sets EV::PREPARE,
     EV::periodic sets EV::PERIODIC and so on, with the exception of I/O
-    events (which can set both EV::READ and EV::WRITE bits), and EV::timer
-    (which uses EV::TIMEOUT).
+    events (which can set both EV::READ and EV::WRITE bits).
 
     In the rare case where one wants to create a watcher but not start it at
     the same time, each constructor has a variant with a trailing "_ns" in
@@ -368,7 +414,7 @@ WATCHER OBJECTS
     $previous_state = $w->keepalive ($bool)
         Normally, "EV::loop" will return when there are no active watchers
         (which is a "deadlock" because no progress can be made anymore).
-        This is convinient because it allows you to start your watchers (and
+        This is convenient because it allows you to start your watchers (and
         your jobs), call "EV::loop" once and when it returns you know that
         all your jobs are finished (or they forgot to register some watchers
         for their task :).
@@ -760,7 +806,7 @@ WATCHER TYPES
         has gathered events), but before any other callbacks have been
         invoked.
 
-        This is used to integrate other event-based software into the EV
+        This can be used to integrate other event-based software into the EV
         mainloop: You register a prepare callback and in there, you create
         io and timer watchers as required by the other software. Here is a
         real-world example of integrating Net::SNMP (with some details left
@@ -806,6 +852,15 @@ WATCHER TYPES
 
         The "check_ns" variant doesn't start (activate) the newly created
         watcher.
+
+    EV::CHECK constant issues
+        Like all other watcher types, there is a bitmask constant for use in
+        $revents and other places. The "EV::CHECK" is special as it has the
+        same name as the "CHECK" sub called by Perl. This doesn't cause big
+        issues on newer perls (beginning with 5.8.9), but it means thatthe
+        constant must be *inlined*, i.e. runtime calls will not work. That
+        means that as long as you always "use EV" and then "EV::CHECK" you
+        are on the safe side.
 
    FORK WATCHERS - the audacity to resume the event loop after a fork
     Fork watchers are called when a "fork ()" was detected. The invocation
@@ -917,10 +972,11 @@ FORK
     course.
 
 SEE ALSO
-    EV::ADNS (asynchronous DNS), Glib::EV (makes Glib/Gtk2 use EV as event
-    loop), EV::Glib (embed Glib into EV), Coro::EV (efficient coroutines
-    with EV), Net::SNMP::EV (asynchronous SNMP), AnyEvent for event-loop
-    agnostic and portable event driven programming.
+    EV::MakeMaker - MakeMaker interface to XS API, EV::ADNS (asynchronous
+    DNS), Glib::EV (makes Glib/Gtk2 use EV as event loop), EV::Glib (embed
+    Glib into EV), Coro::EV (efficient thread integration), Net::SNMP::EV
+    (asynchronous SNMP), AnyEvent for event-loop agnostic and portable event
+    driven programming.
 
 AUTHOR
        Marc Lehmann <schmorp@schmorp.de>

@@ -21,16 +21,16 @@ my $w = EV::stat "$fh", 0.1, sub {
 
    print 0 == $_[0]->stat ? "" : "not ", "ok 12\n";
    print 0 == ($_[0]->stat)[3] ? "" : "not ", "ok 13\n";
-   EV::unloop;
+   EV::break;
 };
 
 my $t = EV::timer 0.2, 0, sub {
    print "ok 2\n";
-   EV::unloop;
+   EV::break;
 };
 
 print $w->stat ? "" : "not ", "ok 1\n";
-EV::loop;
+EV::run;
 print "ok 3\n";
 
 # delete the file, as windows will not update any stats otherwise :(
@@ -38,10 +38,10 @@ undef $fh;
 
 my $t = EV::timer 0.2, 0, sub {
    print "no ok 5\n";
-   EV::unloop;
+   EV::break;
 };
 
 print "ok 4\n";
-EV::loop;
+EV::run;
 print "ok 14\n";
 

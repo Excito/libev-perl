@@ -14,6 +14,7 @@ ev_child *		T_WATCHER
 ev_embed *		T_WATCHER
 ev_stat *		T_WATCHER
 ev_fork *		T_WATCHER
+ev_cleanup *		T_WATCHER
 ev_async *		T_WATCHER
 
 char *			T_PVbyte

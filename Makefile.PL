@@ -37,7 +37,7 @@ print <<EOF;
 
 
 POSIX optionally offers support for a monotonic clock source. EV
-can take advantage of this clock source to detect time jumps
+can take advantage of this clock source to detect time jumps more
 reliably. Unfortunately, some systems are bound to be broken, so you can
 disable this here: you can completely disable the detection and use of
 the monotonic clock by answering 'n' here. Support for this clock type
@@ -57,7 +57,7 @@ POSIX optionally offers support for a (potentially) high-resolution
 realtime clock interface. In a good implementation, using it is faster
 than the normal method of using gettimeofday. Unfortunately, this option
 is also bound to be broken on some systems, and current EV versions do not
-actually call C<gettimeofday> very often, so ti defaults to no.
+actually call gettimeofday very often, so it defaults to no.
 
 EOF
 
@@ -68,7 +68,7 @@ print <<EOF;
 *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***
 
 
-EV can use various backends with various portability issue. The select
+EV can use various backends with various portability issues. The select
 backend is the most portable and makes for a good fallback, but it can be
 limited to a low number of file descriptors and/or might not compile. If
 you have problems with compiling ev_select.c, you might try to play around
@@ -148,12 +148,12 @@ loop with kqueue backend if you ask specifically for it.
 
 Here is what we know:
 
-NetBSD:  partially working in at least 3.1. Yeah! :)
-FreeBSD: broken on at least 6.2-STABLE,
+NetBSD:  partially working in at least 3.1 and later. Yeah! :)
+FreeBSD: broken on at least 6.2-STABLE, spotty in later versions,
          sockets *likely* work, ptys definitely don't.
 OpenBSD: reports indicate that it likely doesn't work
          (similar problems as on FreeBSD).
-OS X:    completely, utterly broken on at least < 10.5.
+OS X:    completely, utterly broken on at least <= 10.6.
 
 EOF
 
@@ -187,7 +187,8 @@ required by EV) now, or accept the default.
 EOF
 
 my $solaris_libs = $^O =~ /solaris/i ? "-lsocket -lnsl" : "";
-my $librt = $^O =~ /linux/i ? "-lpthread" : "-lpthread -lrt";
+#my $librt = $^O =~ /linux/i ? "-lpthread" : "-lpthread -lrt";
+my $librt = "-lpthread -lrt";
 my $LIBS = prompt "Extra libraries for pthread_atfork and clock_gettime?", "$librt $solaris_libs";
 
 
@@ -232,7 +233,7 @@ print <<EOF;
 Another sometimes useful bit of functionality is the Linux signalfd, which
 is useful for faster signal handling (don't care). Kernel support for
 this will be probed at runtime, but your libc must contain the necessary
-wrapper and include files. Glibc 2.9 and later should have this wrapper.
+wrapper. Glibc 2.7 and later should have this wrapper.
 
 EOF
 
@@ -245,9 +246,23 @@ print <<EOF;
 *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***
 
 
+Very rarely, people want to tweak EV even more, e.g. to exclude
+or incldue certain watcher types or backends. Thisc na be done by adding
+extra -D options here, or via the EV_EXTRA_DEFS environment variable.
+Normal persons just press enter.
+
 EOF
 
-my @anyevent = eval { require AnyEvent; $AnyEvent::VERSION < 2.6 } ? (AnyEvent => 2.6) : ();
+$DEFINE .= " " . prompt "Any extra -D options?", "$ENV{EV_EXTRA_DEFS}";
+
+print <<EOF;
+
+*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***
+
+
+EOF
+
+my @anyevent = eval { require AnyEvent; $AnyEvent::VERSION < 5.29 } ? (AnyEvent => 5.29) : ();
 
 WriteMakefile(
     dist	=> {

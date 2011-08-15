@@ -41,11 +41,11 @@ undef $usr1_2;
 
 print "ok 7\n";
 
-$loop->loop;
+$loop->run;
 
 print "ok 9\n";
 
-EV::loop (EV::LOOP_ONESHOT);
+EV::run (EV::RUN_ONCE);
 
 print "ok 11\n";
 
@@ -56,13 +56,13 @@ print "ok 12\n";
 
 kill USR2 => $$;
 
-EV::loop (EV::LOOP_NONBLOCK);
+EV::run (EV::RUN_NOWAIT);
 
 print "ok 14\n";
 
 kill USR1 => $$;
 
-EV::loop (EV::LOOP_NONBLOCK);
+EV::run (EV::RUN_NOWAIT);
 
 print "ok 16\n";
 

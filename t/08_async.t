@@ -15,7 +15,7 @@ use EV;
       print "ok 5\n";
       $a1->cb (sub {
          print "ok 6\n";
-         EV::unloop;
+         EV::break;
       });
       $a1->send;
    };
@@ -30,7 +30,7 @@ use EV;
    $a1->send;
    $a1->send;
    print "ok 3\n";
-   EV::loop;
+   EV::run;
    print "ok 7\n";
 }
 
@@ -45,7 +45,7 @@ use EV;
       print "ok 11\n";
       $a1->cb (sub {
          print "ok 12\n";
-         $l->unloop;
+         $l->break;
       });
       $a1->send;
    });
@@ -59,7 +59,7 @@ use EV;
    $a1->send;
    $a1->send;
    print "ok 9\n";
-   $l->loop;
+   $l->run;
    print "ok 13\n";
 }
 

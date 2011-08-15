@@ -10,7 +10,7 @@ BEGIN {
 my $w = EV::idle sub { print "not ok 3\n"; $_[0]->stop };
 $w->feed_event (EV::CUSTOM);
 $w->stop;
-EV::loop;
+EV::run;
 print "ok 3\n";
 
 my $w = EV::idle sub { print "ok 4\n"; $_[0]->stop };
