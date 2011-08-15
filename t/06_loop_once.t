@@ -16,7 +16,7 @@ my $l = new EV::Loop;
 
 for my $i (3..5) {
    $l->once (undef, 0, ($i - 3) * 0.1 + 0.2, sub {
-      print $_[0] == EV::TIMEOUT ? "" : "not ", "ok $i\n";
+      print $_[0] == EV::TIMER ? "" : "not ", "ok $i\n";
    });
 }
 
@@ -27,5 +27,5 @@ $l->once ($s1, EV::WRITE, 0.1, sub {
 });
 
 print "ok 1\n";
-$l->loop;
+$l->run;
 print "ok 6\n";

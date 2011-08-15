@@ -16,7 +16,7 @@ use EV;
 for my $it ("", 1, 2) {
    for my $i (3..5) {
       EV::once undef, 0, ($i - 3) * 0.1 + 0.2, sub {
-         print $_[0] == EV::TIMEOUT ? "" : "not ", "ok $it$i\n";
+         print $_[0] == EV::TIMER ? "" : "not ", "ok $it$i\n";
       };
    }
 
@@ -27,7 +27,7 @@ for my $it ("", 1, 2) {
    };
 
    print "ok ${it}1\n";
-   EV::loop;
+   EV::run;
    print "ok ${it}6\n";
    EV::signal INT => sub { };
    print "ok ${it}7\n";
@@ -38,3 +38,4 @@ for my $it ("", 1, 2) {
    EV::default_loop;
    print "ok ", ${it}*10 + 10, "\n";
 }
+

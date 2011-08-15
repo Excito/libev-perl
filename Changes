@@ -1,5 +1,63 @@
 Revision history for Perl extension EV
 
+Changes marked with (libev) are changes in libev, and have more
+documentation in the libev Changes file.
+
+4.03 Tue Jan 11 14:51:05 CET 2011
+	- do not avoid the clock_gettime call on GNU/Linux anymore, as EV
+          links against -lpthread anyways - as a result, EV might now take
+          advantage of fast userspace clock_gettime implementations,
+          but also links against -lrt.
+        - (libev) lots of event port bug workarounds.
+        - (libev) officially support files in I/O watchers.
+        - (libev) new function ev_feed_signal.
+        - fix documentation parts still refering to the 3.x API.
+
+4.02 Thu Dec 30 08:27:41 CET 2010
+        - the revents argument did not stringify correctly, as only the
+          numeric value was updated, while the string value was kept from
+          previous invocations.
+
+4.01 Sun Dec  5 12:42:13 CET 2010
+	- fully support EV_COMPAT3=0.
+        - default_fork was stupidly defined as inline.
+        - ask cpan to upgrade AnyEvent if < 5.29.
+        - support EV_EXTRA_DEFS during configuration.
+        - support -DEV_NO_LOOPS for snakker build.
+
+4.00 Mon Oct 25 13:30:09 CEST 2010
+	- many API changes, see the manual.
+        - (libev) lots and lots of bugfixes, see the ev documentation.
+	- fix a bug where inotify usage would parse the same event
+          multiple times, causing various forms of breakage.
+	- greatly reduce stack usage for inotify (8kb to <0.5kb).
+        - expose ev_depth and ev_verify via the XS API.
+        - implement ev_cleanup watchers.
+        - (libev) ev_embed_stop did not correctly stop the watcher.
+        - (libev) disable poll backend on AIX.
+        - (libev) rename EV_TIMEOUT to EV_TIMER.
+        - (libev) add section on accept() problems to the manpage.
+        - (libev) no child watchers on win32.
+        - make code more aliasing compliant, in case perl is ever
+          translated to C.
+        - document the EV::CHECK runtime unavailability.
+        - ported to minix 3.1.7.
+
+3.9  Thu Dec 31 07:59:59 CET 2009
+	- disable t/07* under automatic testing.
+        - increase t/09* timeouts as netbsd has *horribly* broken
+          select/kevent that *usually* sleep >>0.6s instead of 0.3.
+        - add constants EV::FLAG_NOSIGFD, EV::FLAG_NOINOTIFY and
+          EV::BACKEND_ALL.
+        - (libev) signalfd is no longer used by default.
+	- (libev) backport inotify code to C89.
+        - (libev) inotify file descriptors could leak into child processes.
+        - (libev) ev_stat watchers could keep an errornous extra ref on the loop.
+        - (libev) take advantage of inotify_init1, if available.
+        - (libev) the signal handling pipe wasn't always initialised under windows.
+        - changed minimum glibc requirement from glibc 2.9 to 2.7, for signalfd.
+        - (libev) only replace ev_stat.prev when we detect an actual difference.
+
 3.8  Sun Aug  9 15:30:10 CEST 2009
 	- implement $loop->signal/signal_ns.
         - (libev) incompatible change: do not necessarily reset signal

@@ -15,9 +15,12 @@ sv_fileno (SV *fh)
   return s_fileno (fh, 0);
 }
 
+#define EV_STANDALONE 1
 #define EV_PROTOTYPES 1
+#define EV_USE_CLOCK_SYSCALL 0 /* as long as we need pthreads anyways... */
 #define EV_USE_NANOSLEEP EV_USE_MONOTONIC
 #define EV_H <ev.h>
+#define EV_CONFIG_H error
 #include "EV/EVAPI.h"
 
 #define EV_SELECT_IS_WINSOCKET 0
@@ -29,27 +32,31 @@ sv_fileno (SV *fh)
 /* due to bugs in OS X we have to use libev/ explicitly here */
 #include "libev/ev.c"
 
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(_MINIX)
 # include <pthread.h>
 #endif
 
-#define e_loop(w) INT2PTR (struct ev_loop *, SvIVX ((w)->loop))
+#define e_loop(w)  INT2PTR (struct ev_loop *, SvIVX (((ev_watcher *)(w))->loop))
+#define e_flags(w) ((ev_watcher *)(w))->e_flags
+#define e_self(w)  ((ev_watcher *)(w))->self
+#define e_fh(w)    ((ev_watcher *)(w))->fh
+#define e_data(w)  ((ev_watcher *)(w))->data
 
 #define WFLAG_KEEPALIVE 1
 #define WFLAG_UNREFED   2 /* has been unref'ed */
 
 #define UNREF(w)				\
-  if (!((w)->e_flags & (WFLAG_KEEPALIVE | WFLAG_UNREFED))	\
+  if (!(e_flags (w) & (WFLAG_KEEPALIVE | WFLAG_UNREFED))	\
       && ev_is_active (w))			\
     {						\
       ev_unref (e_loop (w));			\
-      (w)->e_flags |= WFLAG_UNREFED;		\
+      e_flags (w) |= WFLAG_UNREFED;		\
     }
 
 #define REF(w)					\
-  if ((w)->e_flags & WFLAG_UNREFED)		\
+  if (e_flags (w) & WFLAG_UNREFED)		\
     {						\
-      (w)->e_flags &= ~WFLAG_UNREFED;		\
+      e_flags (w) &= ~WFLAG_UNREFED;		\
       ev_ref (e_loop (w));			\
     }
 
@@ -116,6 +123,7 @@ static HV
   *stash_check,
   *stash_embed,
   *stash_fork,
+  *stash_cleanup,
   *stash_async;
 
 /////////////////////////////////////////////////////////////////////////////
@@ -123,7 +131,7 @@ static HV
 
 static void e_cb (EV_P_ ev_watcher *w, int revents);
 
-static void *
+void *
 e_new (int size, SV *cb_sv, SV *loop)
 {
   SV *cv = cb_sv ? s_get_cv_croak (cb_sv) : 0;
@@ -195,7 +203,7 @@ e_cb (EV_P_ ev_watcher *w, int revents)
     }
   else
     {
-      sv_self = newRV_inc (w->self); /* w->self MUST be blessed by now */
+      sv_self = newRV_inc (w->self); /* e_self (w) MUST be blessed by now */
       SvREADONLY_on (sv_self);
     }
 
@@ -203,6 +211,7 @@ e_cb (EV_P_ ev_watcher *w, int revents)
     {
       sv_events = sv_events_cache; sv_events_cache = 0;
       SvIV_set (sv_events, revents);
+      SvIOK_only (sv_events);
     }
   else
     {
@@ -296,7 +305,7 @@ e_periodic_cb (ev_periodic *w, ev_tstamp now)
 
   PUSHMARK (SP);
   EXTEND (SP, 2);
-  PUSHs (newRV_inc (w->self)); /* w->self MUST be blessed by now */
+  PUSHs (newRV_inc (e_self (w))); /* e_self (w) MUST be blessed by now */
   PUSHs (newSVnv (now));
 
   PUTBACK;
@@ -336,6 +345,12 @@ e_periodic_cb (ev_periodic *w, ev_tstamp now)
 #define CHECK_SIG(sv,num) if ((num) < 0) \
   croak ("illegal signal number or name: %s", SvPV_nolen (sv));
 
+static void
+default_fork (void)
+{
+  ev_loop_fork (EV_DEFAULT_UC);
+}
+
 /////////////////////////////////////////////////////////////////////////////
 // XS interface functions
 
@@ -360,7 +375,6 @@ BOOT:
     const_iv (EV_, READ)
     const_iv (EV_, WRITE)
     const_iv (EV_, IO)
-    const_iv (EV_, TIMEOUT)
     const_iv (EV_, TIMER)
     const_iv (EV_, PERIODIC)
     const_iv (EV_, SIGNAL)
@@ -371,29 +385,43 @@ BOOT:
     const_iv (EV_, CHECK)
     const_iv (EV_, EMBED)
     const_iv (EV_, FORK)
+    const_iv (EV_, CLEANUP)
     const_iv (EV_, ASYNC)
     const_iv (EV_, CUSTOM)
     const_iv (EV_, ERROR)
 
-    const_iv (EV, LOOP_NONBLOCK)
-    const_iv (EV, LOOP_ONESHOT)
+    const_iv (EV, RUN_NOWAIT)
+    const_iv (EV, RUN_ONCE)
 
-    const_iv (EV, UNLOOP_CANCEL)
-    const_iv (EV, UNLOOP_ONE)
-    const_iv (EV, UNLOOP_ALL)
-
+    const_iv (EV, BREAK_CANCEL)
+    const_iv (EV, BREAK_ONE)
+    const_iv (EV, BREAK_ALL)
     const_iv (EV, BACKEND_SELECT)
     const_iv (EV, BACKEND_POLL)
     const_iv (EV, BACKEND_EPOLL)
     const_iv (EV, BACKEND_KQUEUE)
     const_iv (EV, BACKEND_DEVPOLL)
     const_iv (EV, BACKEND_PORT)
+    const_iv (EV, BACKEND_ALL)
+    const_iv (EV, BACKEND_MASK)
     const_iv (EV, FLAG_AUTO)
-    const_iv (EV, FLAG_NOENV)
     const_iv (EV, FLAG_FORKCHECK)
+    const_iv (EV, FLAG_SIGNALFD)
+    const_iv (EV, FLAG_NOSIGMASK)
+    const_iv (EV, FLAG_NOENV)
+    const_iv (EV, FLAG_NOINOTIFY)
 
     const_iv (EV_, VERSION_MAJOR)
     const_iv (EV_, VERSION_MINOR)
+#if EV_COMPAT3
+    const_iv (EV, FLAG_NOSIGFD) /* compatibility, always 0 */
+    const_iv (EV_, TIMEOUT)
+    const_iv (EV, LOOP_NONBLOCK)
+    const_iv (EV, LOOP_ONESHOT)
+    const_iv (EV, UNLOOP_CANCEL)
+    const_iv (EV, UNLOOP_ONE)
+    const_iv (EV, UNLOOP_ALL)
+#endif
   };
 
   for (civ = const_iv + sizeof (const_iv) / sizeof (const_iv [0]); civ-- > const_iv; )
@@ -412,6 +440,7 @@ BOOT:
   stash_embed    = gv_stashpv ("EV::Embed"   , 1);
   stash_stat     = gv_stashpv ("EV::Stat"    , 1);
   stash_fork     = gv_stashpv ("EV::Fork"    , 1);
+  stash_cleanup  = gv_stashpv ("EV::Cleanup" , 1);
   stash_async    = gv_stashpv ("EV::Async"   , 1);
 
   {
@@ -431,8 +460,8 @@ BOOT:
     evapi.loop_new             = ev_loop_new;
     evapi.loop_destroy         = ev_loop_destroy;
     evapi.loop_fork            = ev_loop_fork;
-    evapi.loop_count           = ev_loop_count;
-    evapi.loop_depth           = ev_loop_depth;
+    evapi.iteration            = ev_iteration;
+    evapi.depth                = ev_depth;
     evapi.set_userdata         = ev_set_userdata;
     evapi.userdata             = ev_userdata;
     evapi.now                  = ev_now;
@@ -440,14 +469,15 @@ BOOT:
     evapi.suspend              = ev_suspend;
     evapi.resume               = ev_resume;
     evapi.backend              = ev_backend;
-    evapi.unloop               = ev_unloop;
+    evapi.break_               = ev_break;
     evapi.invoke_pending       = ev_invoke_pending;
     evapi.pending_count        = ev_pending_count;
+    evapi.verify               = ev_verify;
     evapi.set_loop_release_cb  = ev_set_loop_release_cb;
     evapi.set_invoke_pending_cb= ev_set_invoke_pending_cb;
     evapi.ref                  = ev_ref;
     evapi.unref                = ev_unref;
-    evapi.loop                 = ev_loop;
+    evapi.run                  = ev_run;
     evapi.once                 = ev_once;
     evapi.io_start             = ev_io_start;
     evapi.io_stop              = ev_io_stop;
@@ -465,8 +495,10 @@ BOOT:
     evapi.prepare_stop         = ev_prepare_stop;
     evapi.check_start          = ev_check_start;
     evapi.check_stop           = ev_check_stop;
+#if EV_CHILD_ENABLE
     evapi.child_start          = ev_child_start;
     evapi.child_stop           = ev_child_stop;
+#endif
     evapi.stat_start           = ev_stat_start;
     evapi.stat_stop            = ev_stat_stop;
     evapi.stat_stat            = ev_stat_stat;
@@ -475,6 +507,8 @@ BOOT:
     evapi.embed_sweep          = ev_embed_sweep;
     evapi.fork_start           = ev_fork_start;
     evapi.fork_stop            = ev_fork_stop;
+    evapi.cleanup_start        = ev_cleanup_start;
+    evapi.cleanup_stop         = ev_cleanup_stop;
     evapi.async_start          = ev_async_start;
     evapi.async_stop           = ev_async_stop;
     evapi.async_send           = ev_async_send;
@@ -484,8 +518,8 @@ BOOT:
     sv_setiv (sv, (IV)&evapi);
     SvREADONLY_on (sv);
   }
-#ifndef _WIN32
-  pthread_atfork (0, 0, ev_default_fork);
+#if !defined(_WIN32) && !defined(_MINIX)
+  pthread_atfork (0, 0, default_fork);
 #endif
 }
 
@@ -509,7 +543,7 @@ SV *ev_default_loop (unsigned int flags = 0)
 
 void ev_default_destroy ()
 	CODE:
-        ev_default_destroy ();
+        ev_loop_destroy (EV_DEFAULT_UC);
         SvREFCNT_dec (default_loop_sv);
         default_loop_sv = 0;
 
@@ -522,6 +556,15 @@ unsigned int ev_embeddable_backends ()
 void ev_sleep (NV interval)
 
 NV ev_time ()
+
+void ev_feed_signal (SV *signal)
+	CODE:
+{
+  	Signal signum = s_signum (signal);
+        CHECK_SIG (signal, signum);
+
+        ev_feed_signal (signum);
+}
 
 NV ev_now ()
 	C_ARGS: evapi.default_loop
@@ -538,13 +581,19 @@ void ev_resume ()
 unsigned int ev_backend ()
 	C_ARGS: evapi.default_loop
 
-void ev_loop_verify ()
+void ev_verify ()
+	ALIAS:
+        loop_verify = 1
 	C_ARGS: evapi.default_loop
 
-unsigned int ev_loop_count ()
+unsigned int ev_iteration ()
+	ALIAS:
+        loop_count = 1
 	C_ARGS: evapi.default_loop
 
-unsigned int ev_loop_depth ()
+unsigned int ev_depth ()
+	ALIAS:
+        loop_depth = 1
 	C_ARGS: evapi.default_loop
 
 void ev_set_io_collect_interval (NV interval)
@@ -553,10 +602,14 @@ void ev_set_io_collect_interval (NV interval)
 void ev_set_timeout_collect_interval (NV interval)
 	C_ARGS: evapi.default_loop, interval
 
-void ev_loop (int flags = 0)
+void ev_run (int flags = 0)
+	ALIAS:
+        loop = 1
 	C_ARGS: evapi.default_loop, flags
 
-void ev_unloop (int how = EVUNLOOP_ONE)
+void ev_break (int how = EVBREAK_ONE)
+	ALIAS:
+        unloop = 1
 	C_ARGS: evapi.default_loop, how
 
 void ev_feed_fd_event (int fd, int revents = EV_NONE)
@@ -593,7 +646,7 @@ ev_io *io (SV *fh, int events, SV *cb)
           }
 
         RETVAL = e_new (sizeof (ev_io), cb, default_loop_sv);
-        RETVAL->fh = newSVsv (fh);
+        e_fh (RETVAL) = newSVsv (fh);
         ev_io_set (RETVAL, fd, events);
         if (!ix) START (io, RETVAL);
 }
@@ -621,8 +674,8 @@ SV *periodic (NV at, NV interval, SV *reschedule_cb, SV *cb)
 {
   	ev_periodic *w;
         w = e_new (sizeof (ev_periodic), cb, default_loop_sv);
-        w->fh = SvTRUE (reschedule_cb) ? newSVsv (reschedule_cb) : 0;
-        ev_periodic_set (w, at, interval, w->fh ? e_periodic_cb : 0);
+        e_fh (w) = SvTRUE (reschedule_cb) ? newSVsv (reschedule_cb) : 0;
+        ev_periodic_set (w, at, interval, e_fh (w) ? e_periodic_cb : 0);
         RETVAL = e_bless ((ev_watcher *)w, stash_periodic);
         if (!ix) START (periodic, w);
 }
@@ -684,26 +737,43 @@ ev_fork *fork (SV *cb)
 	OUTPUT:
         RETVAL
 
+ev_cleanup *cleanup (SV *cb)
+	ALIAS:
+        cleanup_ns = 1
+	CODE:
+        RETVAL = e_new (sizeof (ev_cleanup), cb, default_loop_sv);
+        ev_cleanup_set (RETVAL);
+        if (!ix) START (cleanup, RETVAL);
+	OUTPUT:
+        RETVAL
+
 ev_child *child (int pid, int trace, SV *cb)
 	ALIAS:
         child_ns = 1
 	CODE:
+#if EV_CHILD_ENABLE
         RETVAL = e_new (sizeof (ev_child), cb, default_loop_sv);
         ev_child_set (RETVAL, pid, trace);
         if (!ix) START (child, RETVAL);
+#else
+        croak ("EV::child watchers not supported on this platform");
+#endif
 	OUTPUT:
         RETVAL
+
 
 ev_stat *stat (SV *path, NV interval, SV *cb)
 	ALIAS:
         stat_ns = 1
 	CODE:
         RETVAL = e_new (sizeof (ev_stat), cb, default_loop_sv);
-        RETVAL->fh = newSVsv (path);
-        ev_stat_set (RETVAL, SvPVbyte_nolen (RETVAL->fh), interval);
+        e_fh (RETVAL) = newSVsv (path);
+        ev_stat_set (RETVAL, SvPVbyte_nolen (e_fh (RETVAL)), interval);
         if (!ix) START (stat, RETVAL);
 	OUTPUT:
         RETVAL
+
+#ifndef EV_NO_LOOPS
 
 ev_embed *embed (struct ev_loop *loop, SV *cb = 0)
 	ALIAS:
@@ -714,12 +784,14 @@ ev_embed *embed (struct ev_loop *loop, SV *cb = 0)
           croak ("passed loop is not embeddable via EV::embed,");
 
         RETVAL = e_new (sizeof (ev_embed), cb, default_loop_sv);
-        RETVAL->fh = newSVsv (ST (0));
+        e_fh (RETVAL) = newSVsv (ST (0));
         ev_embed_set (RETVAL, loop);
         if (!ix) START (embed, RETVAL);
 }
 	OUTPUT:
         RETVAL
+
+#endif
 
 ev_async *async (SV *cb)
 	ALIAS:
@@ -862,7 +934,7 @@ void set (ev_io *w, SV *fh, int events)
 	int fd = s_fileno (fh, events & EV_WRITE);
         CHECK_FD (fh, fd);
 
-        sv_setsv (w->fh, fh);
+        sv_setsv (e_fh (w), fh);
         RESET (io, w, (w, fd, events));
 }
 
@@ -874,13 +946,13 @@ SV *fh (ev_io *w, SV *new_fh = 0)
             int fd = s_fileno (new_fh, w->events & EV_WRITE);
             CHECK_FD (new_fh, fd);
 
-            RETVAL = w->fh;
-            w->fh = newSVsv (new_fh);
+            RETVAL = e_fh (w);
+            e_fh (w) = newSVsv (new_fh);
 
             RESET (io, w, (w, fd, w->events));
           }
         else
-          RETVAL = newSVsv (w->fh);
+          RETVAL = newSVsv (e_fh (w));
 }
 	OUTPUT:
         RETVAL
@@ -996,10 +1068,10 @@ void set (ev_periodic *w, NV at, NV interval = 0., SV *reschedule_cb = &PL_sv_un
         CHECK_REPEAT (interval);
 	CODE:
 {
-        SvREFCNT_dec (w->fh);
-        w->fh = SvTRUE (reschedule_cb) ? newSVsv (reschedule_cb) : 0;
+        SvREFCNT_dec (e_fh (w));
+        e_fh (w) = SvTRUE (reschedule_cb) ? newSVsv (reschedule_cb) : 0;
 
-        RESET (periodic, w, (w, at, interval, w->fh ? e_periodic_cb : 0));
+        RESET (periodic, w, (w, at, interval, e_fh (w) ? e_periodic_cb : 0));
 }
 
 NV at (ev_periodic *w)
@@ -1068,7 +1140,30 @@ void DESTROY (ev_fork *w)
         STOP (fork, w);
         e_destroy (w);
 
+MODULE = EV		PACKAGE = EV::Cleanup	PREFIX = ev_cleanup_
+
+void ev_cleanup_start (ev_cleanup *w)
+	CODE:
+        START (cleanup, w);
+
+void ev_cleanup_stop (ev_cleanup *w)
+	CODE:
+        STOP (cleanup, w);
+
+void DESTROY (ev_cleanup *w)
+	CODE:
+        STOP (cleanup, w);
+        e_destroy (w);
+
+int keepalive (ev_watcher *w, int new_value = 0)
+	CODE:
+        RETVAL = 0;
+	OUTPUT:
+        RETVAL
+
 MODULE = EV		PACKAGE = EV::Child	PREFIX = ev_child_
+
+#if EV_CHILD_ENABLE
 
 void ev_child_start (ev_child *w)
 	CODE:
@@ -1098,6 +1193,8 @@ int pid (ev_child *w)
 	OUTPUT:
         RETVAL
 
+#endif
+
 MODULE = EV		PACKAGE = EV::Stat	PREFIX = ev_stat_
 
 void ev_stat_start (ev_stat *w)
@@ -1116,20 +1213,20 @@ void DESTROY (ev_stat *w)
 void set (ev_stat *w, SV *path, NV interval)
 	CODE:
 {
-        sv_setsv (w->fh, path);
-	RESET (stat, w, (w, SvPVbyte_nolen (w->fh), interval));
+        sv_setsv (e_fh (w), path);
+	RESET (stat, w, (w, SvPVbyte_nolen (e_fh (w)), interval));
 }
 
 SV *path (ev_stat *w, SV *new_path = 0)
 	CODE:
 {
-        RETVAL = SvREFCNT_inc (w->fh);
+        RETVAL = SvREFCNT_inc (e_fh (w));
 
         if (items > 1)
           {
-            SvREFCNT_dec (w->fh);
-            w->fh = newSVsv (new_path);
-            RESET (stat, w, (w, SvPVbyte_nolen (w->fh), w->interval));
+            SvREFCNT_dec (e_fh (w));
+            e_fh (w) = newSVsv (new_path);
+            RESET (stat, w, (w, SvPVbyte_nolen (e_fh (w)), w->interval));
           }
 }
 	OUTPUT:
@@ -1141,7 +1238,7 @@ NV interval (ev_stat *w, NV new_interval = 0.)
         RETVAL = w->interval;
 
         if (items > 1)
-          RESET (stat, w, (w, SvPVbyte_nolen (w->fh), new_interval));
+          RESET (stat, w, (w, SvPVbyte_nolen (e_fh (w)), new_interval));
 }
 	OUTPUT:
         RETVAL
@@ -1210,13 +1307,13 @@ void DESTROY (ev_embed *w)
 void set (ev_embed *w, struct ev_loop *loop)
 	CODE:
 {
-        sv_setsv (w->fh, ST (1));
+        sv_setsv (e_fh (w), ST (1));
 	RESET (embed, w, (w, loop));
 }
 
 SV *other (ev_embed *w)
 	CODE:
-        RETVAL = newSVsv (w->fh);
+        RETVAL = newSVsv (e_fh (w));
 	OUTPUT:
         RETVAL
 
@@ -1247,6 +1344,8 @@ SV *ev_async_async_pending (ev_async *w)
 	OUTPUT:
         RETVAL
 
+#ifndef EV_NO_LOOPS
+
 MODULE = EV		PACKAGE = EV::Loop	PREFIX = ev_
 
 SV *new (SV *klass, unsigned int flags = 0)
@@ -1264,12 +1363,12 @@ SV *new (SV *klass, unsigned int flags = 0)
 
 void DESTROY (struct ev_loop *loop)
 	CODE:
-        if (loop != evapi.default_loop) /* global destruction sucks */
+        /* 1. the default loop shouldn't be freed by destroying it'S pelr loop object */
+        /* 2. not doing so helps avoid many global destruction bugs in perl, too */
+        if (loop != evapi.default_loop)
           ev_loop_destroy (loop);
 
 void ev_loop_fork (struct ev_loop *loop)
-
-void ev_loop_verify (struct ev_loop *loop)
 
 NV ev_now (struct ev_loop *loop)
 
@@ -1285,13 +1384,25 @@ void ev_set_timeout_collect_interval (struct ev_loop *loop, NV interval)
 
 unsigned int ev_backend (struct ev_loop *loop)
 
-unsigned int ev_loop_count (struct ev_loop *loop)
+void ev_verify (struct ev_loop *loop)
+	ALIAS:
+        loop_verify = 1
 
-unsigned int ev_loop_depth (struct ev_loop *loop)
+unsigned int ev_iteration (struct ev_loop *loop)
+	ALIAS:
+        loop_count = 1
 
-void ev_loop (struct ev_loop *loop, int flags = 0)
+unsigned int ev_depth (struct ev_loop *loop)
+	ALIAS:
+        loop_depth = 1
 
-void ev_unloop (struct ev_loop *loop, int how = 1)
+void ev_run (struct ev_loop *loop, int flags = 0)
+	ALIAS:
+        loop = 1
+
+void ev_break (struct ev_loop *loop, int how = 1)
+	ALIAS:
+        unloop = 1
 
 void ev_feed_fd_event (struct ev_loop *loop, int fd, int revents = EV_NONE)
 
@@ -1321,7 +1432,7 @@ ev_io *io (struct ev_loop *loop, SV *fh, int events, SV *cb)
         CHECK_FD (fh, fd);
 
         RETVAL = e_new (sizeof (ev_io), cb, ST (0));
-        RETVAL->fh = newSVsv (fh);
+        e_fh (RETVAL) = newSVsv (fh);
         ev_io_set (RETVAL, fd, events);
         if (!ix) START (io, RETVAL);
 }
@@ -1349,8 +1460,8 @@ SV *periodic (struct ev_loop *loop, NV at, NV interval, SV *reschedule_cb, SV *c
 {
   	ev_periodic *w;
         w = e_new (sizeof (ev_periodic), cb, ST (0));
-        w->fh = SvTRUE (reschedule_cb) ? newSVsv (reschedule_cb) : 0;
-        ev_periodic_set (w, at, interval, w->fh ? e_periodic_cb : 0);
+        e_fh (w) = SvTRUE (reschedule_cb) ? newSVsv (reschedule_cb) : 0;
+        ev_periodic_set (w, at, interval, e_fh (w) ? e_periodic_cb : 0);
         RETVAL = e_bless ((ev_watcher *)w, stash_periodic);
         if (!ix) START (periodic, w);
 }
@@ -1412,13 +1523,27 @@ ev_fork *fork (struct ev_loop *loop, SV *cb)
 	OUTPUT:
         RETVAL
 
+ev_cleanup *cleanup (struct ev_loop *loop, SV *cb)
+	ALIAS:
+        cleanup_ns = 1
+	CODE:
+        RETVAL = e_new (sizeof (ev_cleanup), cb, ST (0));
+        ev_cleanup_set (RETVAL);
+        if (!ix) START (cleanup, RETVAL);
+	OUTPUT:
+        RETVAL
+
 ev_child *child (struct ev_loop *loop, int pid, int trace, SV *cb)
 	ALIAS:
         child_ns = 1
 	CODE:
+#if EV_CHILD_ENABLE
         RETVAL = e_new (sizeof (ev_child), cb, ST (0));
         ev_child_set (RETVAL, pid, trace);
         if (!ix) START (child, RETVAL);
+#else
+        croak ("EV::child watchers not supported on this platform");
+#endif
 	OUTPUT:
         RETVAL
 
@@ -1427,8 +1552,8 @@ ev_stat *stat (struct ev_loop *loop, SV *path, NV interval, SV *cb)
         stat_ns = 1
 	CODE:
         RETVAL = e_new (sizeof (ev_stat), cb, ST (0));
-        RETVAL->fh = newSVsv (path);
-        ev_stat_set (RETVAL, SvPVbyte_nolen (RETVAL->fh), interval);
+        e_fh (RETVAL) = newSVsv (path);
+        ev_stat_set (RETVAL, SvPVbyte_nolen (e_fh (RETVAL)), interval);
         if (!ix) START (stat, RETVAL);
 	OUTPUT:
         RETVAL
@@ -1442,7 +1567,7 @@ ev_embed *embed (struct ev_loop *loop, struct ev_loop *other, SV *cb = 0)
           croak ("passed loop is not embeddable via EV::embed,");
 
         RETVAL = e_new (sizeof (ev_embed), cb, ST (0));
-        RETVAL->fh = newSVsv (ST (1));
+        e_fh (RETVAL) = newSVsv (ST (1));
         ev_embed_set (RETVAL, other);
         if (!ix) START (embed, RETVAL);
 }
@@ -1468,4 +1593,6 @@ void once (struct ev_loop *loop, SV *fh, int events, SV *timeout, SV *cb)
            e_once_cb,
            newSVsv (cb)
         );
+
+#endif
 

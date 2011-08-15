@@ -15,7 +15,7 @@
 #define EV_COMMON				\
   int e_flags; /* cheap on 64 bit systems */	\
   SV *loop;                                     \
-  SV *self; /* contains this struct */		\
+  SV *self;    /* contains this struct */	\
   SV *cb_sv, *fh, *data;
 
 #ifndef EV_PROTOTYPES
@@ -28,14 +28,11 @@
 
 #include EV_H
 
-#define EV_STANDALONE   1
-#define EV_MULTIPLICITY 1
-
 struct EVAPI {
   I32 ver;
   I32 rev;
-#define EV_API_VERSION 4
-#define EV_API_REVISION 5
+#define EV_API_VERSION 5
+#define EV_API_REVISION 0
 
   struct ev_loop *default_loop;
   unsigned int supported_backends;
@@ -51,24 +48,40 @@ struct EVAPI {
   /* same as libev functions */
   ev_tstamp (*time_)(void);
   void (*sleep_)(ev_tstamp);
-  ev_tstamp (*now)(EV_P);
+
   struct ev_loop *(*loop_new)(unsigned int);
   void (*loop_destroy)(EV_P);
   void (*loop_fork)(EV_P);
-  unsigned int (*loop_count)(EV_P);
   unsigned int (*backend)(EV_P);
-  void (*loop)(EV_P_ int flags);
-  void (*unloop)(EV_P_ int how);
-  void (*ref)(EV_P);
+  unsigned int (*iteration)(EV_P);
+  unsigned int (*depth)(EV_P);
+  ev_tstamp (*now)(EV_P);
+  void (*now_update)(EV_P);
+  void (*run)(EV_P_ int flags);
+  void (*break_)(EV_P_ int how);
+  void (*suspend)(EV_P); 
+  void (*resume) (EV_P); 
+  void (*ref)  (EV_P);
   void (*unref)(EV_P);
+  void (*set_userdata)(EV_P_ void *data);
+  void *(*userdata)   (EV_P);
+  void (*set_loop_release_cb)  (EV_P_ void (*release)(EV_P), void (*acquire)(EV_P));
+  void (*set_invoke_pending_cb)(EV_P_ void (*invoke_pending_cb)(EV_P));
+  unsigned int (*pending_count)(EV_P);
+  void (*invoke_pending)       (EV_P);
+  void (*verify)               (EV_P);
+
   void (*once)(EV_P_ int fd, int events, ev_tstamp timeout, void (*cb)(int revents, void *arg), void *arg);
-  int  (*clear_pending)(EV_P_ void *);
+
   void (*invoke)(EV_P_ void *, int);
+  int  (*clear_pending)(EV_P_ void *);
+
   void (*io_start)(EV_P_ ev_io *);
   void (*io_stop) (EV_P_ ev_io *);
   void (*timer_start)(EV_P_ ev_timer *);
   void (*timer_stop) (EV_P_ ev_timer *);
   void (*timer_again)(EV_P_ ev_timer *);
+  ev_tstamp (*timer_remaining) (EV_P_ ev_timer *);
   void (*periodic_start)(EV_P_ ev_periodic *);
   void (*periodic_stop) (EV_P_ ev_periodic *);
   void (*signal_start)(EV_P_ ev_signal *);
@@ -89,21 +102,11 @@ struct EVAPI {
   void (*embed_sweep)(EV_P_ ev_embed *);
   void (*fork_start) (EV_P_ ev_fork *);
   void (*fork_stop)  (EV_P_ ev_fork *);
+  void (*cleanup_start) (EV_P_ ev_cleanup *);
+  void (*cleanup_stop)  (EV_P_ ev_cleanup *);
   void (*async_start)(EV_P_ ev_async *);
   void (*async_stop) (EV_P_ ev_async *);
   void (*async_send) (EV_P_ ev_async *);
-  /* TODO: move up on next major API bump */
-  void (*now_update) (EV_P);
-  void (*suspend)    (EV_P); 
-  void (*resume)     (EV_P); 
-  unsigned int (*loop_depth)(EV_P);
-  void (*set_userdata)(EV_P_ void *data);
-  void *(*userdata)   (EV_P);
-  void (*set_loop_release_cb)  (EV_P_ void (*release)(EV_P), void (*acquire)(EV_P));
-  void (*set_invoke_pending_cb)(EV_P_ void (*invoke_pending_cb)(EV_P));
-  void (*invoke_pending)       (EV_P);
-  unsigned int (*pending_count)(EV_P);
-  ev_tstamp (*timer_remaining) (EV_P_ ev_timer *);
 };
 
 #if !EV_PROTOTYPES
@@ -120,26 +123,36 @@ struct EVAPI {
 
 # define sv_fileno(sv)             GEVAPI->sv_fileno (sv)
 # define sv_signum(sv)             GEVAPI->sv_signum (sv)
+
 # define ev_time()                 GEVAPI->time_ ()
 # define ev_sleep(time)            GEVAPI->sleep_ ((time))
+
 # define ev_loop_new(flags)        GEVAPI->loop_new ((flags))
 # define ev_loop_destroy(loop)     GEVAPI->loop_destroy ((loop))
 # define ev_loop_fork(loop)        GEVAPI->loop_fork ((loop))
-# define ev_loop_count(loop)       GEVAPI->loop_count ((loop))
-# define ev_set_userdata(l,p)      GEVAPI->set_userdata ((l), (p))
-# define ev_userdata(l)            GEVAPI->userdata (l)
+# define ev_backend(loop)          GEVAPI->backend ((loop))
+# define ev_iteration(loop)        GEVAPI->iteration ((loop))
+# define ev_depth(loop)            GEVAPI->depth ((depth))
 # define ev_now(loop)              GEVAPI->now ((loop))
 # define ev_now_update(loop)       GEVAPI->now_update ((loop))
+# define ev_run(l,flags)           GEVAPI->run ((l), (flags))
+# define ev_break(loop,how)        GEVAPI->break_ ((loop), (how))
 # define ev_suspend(loop)          GEVAPI->suspend ((loop))
 # define ev_resume(loop)           GEVAPI->resume ((loop))
-# define ev_backend(loop)          GEVAPI->backend ((loop))
-# define ev_loop(l,flags)          GEVAPI->loop ((l), (flags))
-# define ev_unloop(loop,how)       GEVAPI->unloop ((loop), (how))
-# define ev_invoke_pending(l)      GEVAPI->invoke_pending ((l))
-# define ev_pending_count(l)       GEVAPI->pending_count ((l))
+# define ev_ref(loop)              GEVAPI->ref   (loop)
+# define ev_unref(loop)            GEVAPI->unref (loop)
+# define ev_set_userdata(l,p)      GEVAPI->set_userdata ((l), (p))
+# define ev_userdata(l)            GEVAPI->userdata (l)
 # define ev_set_loop_release_cb(l,r,a) GEVAPI->set_loop_release_cb ((l), (r), (a))
 # define ev_set_invoke_pending_cb(l,c) GEVAPI->set_invoke_pending_cb ((l), (c))
+# define ev_invoke_pending(l)      GEVAPI->invoke_pending ((l))
+# define ev_pending_count(l)       GEVAPI->pending_count ((l))
+# define ev_verify(l)              GEVAPI->verify ((l))
+
 # define ev_once(loop,fd,events,timeout,cb,arg) GEVAPI->once ((loop), (fd), (events), (timeout), (cb), (arg))
+
+# define ev_invoke(l,w,rev)        GEVAPI->invoke ((l), (w), (rev))
+# define ev_clear_pending(l,w)     GEVAPI->clear_pending ((l), (w))
 # define ev_io_start(l,w)          GEVAPI->io_start ((l), (w))
 # define ev_io_stop(l,w)           GEVAPI->io_stop  ((l), (w))
 # define ev_timer_start(l,w)       GEVAPI->timer_start ((l), (w))
@@ -166,26 +179,24 @@ struct EVAPI {
 # define ev_embed_sweep(l,w)       GEVAPI->embed_sweep ((l), (w))
 # define ev_fork_start(l,w)        GEVAPI->fork_start ((l), (w))
 # define ev_fork_stop(l,w)         GEVAPI->fork_stop  ((l), (w))
+# define ev_cleanup_start(l,w)     GEVAPI->cleanup_start ((l), (w))
+# define ev_cleanup_stop(l,w)      GEVAPI->cleanup_stop  ((l), (w))
 # define ev_async_start(l,w)       GEVAPI->async_start ((l), (w))
 # define ev_async_stop(l,w)        GEVAPI->async_stop  ((l), (w))
 # define ev_async_send(l,w)        GEVAPI->async_send  ((l), (w))
-# define ev_ref(loop)              GEVAPI->ref   (loop)
-# define ev_unref(loop)            GEVAPI->unref (loop)
-# define ev_clear_pending(l,w)     GEVAPI->clear_pending ((l), (w))
-# define ev_invoke(l,w,rev)        GEVAPI->invoke ((l), (w), (rev))
 #endif
 
 static struct EVAPI *GEVAPI;
 
-#define I_EV_API(YourName)                                                       \
-STMT_START {                                                                     \
-  SV *sv = perl_get_sv ("EV::API", 0);                                           \
-  if (!sv) croak ("EV::API not found");                                          \
-  GEVAPI = (struct EVAPI*) SvIV (sv);                                            \
-  if (GEVAPI->ver != EV_API_VERSION                                              \
-      || GEVAPI->rev < EV_API_REVISION)                                          \
-    croak ("EV::API version mismatch (%d.%d vs. %d.%d) -- please recompile %s",  \
-           GEVAPI->ver, GEVAPI->rev, EV_API_VERSION, EV_API_REVISION, YourName); \
+#define I_EV_API(YourName)                                                         \
+STMT_START {                                                                       \
+  SV *sv = perl_get_sv ("EV::API", 0);                                             \
+  if (!sv) croak ("EV::API not found");                                            \
+  GEVAPI = (struct EVAPI*) SvIV (sv);                                              \
+  if (GEVAPI->ver != EV_API_VERSION                                                \
+      || GEVAPI->rev < EV_API_REVISION)                                            \
+    croak ("EV::API version mismatch (%d.%d vs. %d.%d) -- please recompile '%s'",  \
+           GEVAPI->ver, GEVAPI->rev, EV_API_VERSION, EV_API_REVISION, YourName);   \
 } STMT_END
 
 #endif
