@@ -1,9 +1,9 @@
 Source: libev-perl
 Section: perl
 Priority: optional
-Build-Depends: debhelper (>= 7), perl (>= 5.6.0-12), libev-dev, libcommon-sense-perl
+Build-Depends: debhelper (>= 7.2), perl (>= 5.6.0-12), libev-dev, libcommon-sense-perl
 Maintainer: Carl Fürstenberg <carl@excito.com>
-Standards-Version: 3.8.0
+Standards-Version: 3.9.1
 Homepage: http://search.cpan.org/dist/EV/
 
 Package: libev-perl
